@@ -5,3 +5,6 @@ __pycache__/
 logs/
 stalker_data.db
 todo.txt
+website/
+build/
+dist/

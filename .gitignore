@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 logs/
 stalker_data.db
+todo.txt

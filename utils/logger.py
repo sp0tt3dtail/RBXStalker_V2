@@ -13,22 +13,21 @@ def setup_logger():
     logger = logging.getLogger("RBXStalker")
     logger.setLevel(logging.INFO)
 
-    # Clear existing handlers to avoid duplicates if re-initialized
     if logger.hasHandlers():
         logger.handlers.clear()
 
-    # 1. Console Handler
+    # 1. Console Output
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(logging.Formatter(
         "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     ))
     logger.addHandler(console_handler)
 
-    # 2. Rotating File Handler (Max 5 files, 5MB each)
+    # 2. File Output with Rotation (Max 5MB per file, keeps 5 backups)
     file_handler = logging.handlers.RotatingFileHandler(
         filename=os.path.join(LOG_DIR, LOG_FILE_NAME),
         maxBytes=5 * 1024 * 1024, # 5MB
-        backupCount=5,            # Keep 5 backups
+        backupCount=5,
         encoding="utf-8"
     )
     file_handler.setFormatter(logging.Formatter(

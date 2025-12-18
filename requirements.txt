@@ -1,0 +1,1 @@
+discord.pyaiohttpaiosqlitepython-dotenvcoloramacustomtkinterpackagingpillow

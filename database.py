@@ -12,10 +12,13 @@ async def init_db():
                 username TEXT,
                 display_name TEXT,
                 ping_mode TEXT DEFAULT 'ping',
+                priority INTEGER DEFAULT 0,
                 last_presence_type INTEGER DEFAULT 0,
                 last_game_name TEXT,
                 last_avatar_url TEXT,
-                enabled INTEGER DEFAULT 1
+                enabled INTEGER DEFAULT 1,
+                last_place_id INTEGER,
+                last_game_id TEXT
             )
         """)
         
@@ -24,8 +27,9 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS user_history (
                 user_id INTEGER PRIMARY KEY,
                 friend_ids TEXT DEFAULT '[]',
-                group_ids TEXT DEFAULT '[]',
+                group_data TEXT DEFAULT '{}',
                 badge_ids TEXT DEFAULT '[]',
+                socials TEXT DEFAULT '{}',
                 FOREIGN KEY(user_id) REFERENCES tracked_users(user_id) ON DELETE CASCADE
             )
         """)
@@ -36,23 +40,30 @@ async def init_db():
                 guild_id INTEGER PRIMARY KEY,
                 event_channel_id INTEGER,
                 log_channel_id INTEGER,
+                event_webhook_url TEXT,
                 admin_role_id INTEGER,
-                prefix TEXT DEFAULT '!'
+                prefix TEXT DEFAULT '!',
+                show_logs_on_startup INTEGER DEFAULT 1
             )
         """)
         
-        # 4. Schema Migrations
-        try:
-            await db.execute("ALTER TABLE server_config ADD COLUMN prefix TEXT DEFAULT '!'")
-        except Exception:
-            pass 
-
-        try:
-            # Add columns for detailed game tracking (Server hopping support)
-            await db.execute("ALTER TABLE tracked_users ADD COLUMN last_place_id INTEGER")
-            await db.execute("ALTER TABLE tracked_users ADD COLUMN last_game_id TEXT")
-        except Exception:
-            pass
+        # 4. Migrations (Safe updates for existing DBs)
+        migrations = [
+            "ALTER TABLE tracked_users ADD COLUMN priority INTEGER DEFAULT 0",
+            "ALTER TABLE tracked_users ADD COLUMN last_place_id INTEGER",
+            "ALTER TABLE tracked_users ADD COLUMN last_game_id TEXT",
+            "ALTER TABLE user_history ADD COLUMN group_data TEXT DEFAULT '{}'",
+            "ALTER TABLE user_history ADD COLUMN socials TEXT DEFAULT '{}'",
+            "ALTER TABLE server_config ADD COLUMN event_webhook_url TEXT",
+            "ALTER TABLE server_config ADD COLUMN show_logs_on_startup INTEGER DEFAULT 1",
+            "ALTER TABLE server_config ADD COLUMN prefix TEXT DEFAULT '!'"
+        ]
+        
+        for mig in migrations:
+            try:
+                await db.execute(mig)
+            except Exception:
+                pass 
 
         await db.commit()
 
@@ -62,7 +73,6 @@ async def get_db():
 # --- HELPERS ---
 
 async def get_prefix_by_guild_id(guild_id):
-    """Fetches prefix directly by ID (Used for main.py startup message)."""
     async with aiosqlite.connect(DB_NAME) as db:
         cursor = await db.execute("SELECT prefix FROM server_config WHERE guild_id = ?", (guild_id,))
         row = await cursor.fetchone()
@@ -84,13 +94,13 @@ async def set_server_prefix(guild_id, new_prefix):
         """, (guild_id, new_prefix, new_prefix))
         await db.commit()
 
-async def add_user_to_track(user_id, username, display_name, ping_mode='ping'):
+async def add_user_to_track(user_id, username, display_name, ping_mode='ping', priority=0):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("""
             INSERT OR REPLACE INTO tracked_users 
-            (user_id, username, display_name, ping_mode) 
-            VALUES (?, ?, ?, ?)
-        """, (user_id, username, display_name, ping_mode))
+            (user_id, username, display_name, ping_mode, priority, enabled) 
+            VALUES (?, ?, ?, ?, ?, 1)
+        """, (user_id, username, display_name, ping_mode, priority))
         await db.execute("INSERT OR IGNORE INTO user_history (user_id) VALUES (?)", (user_id,))
         await db.commit()
 
@@ -111,7 +121,6 @@ async def update_user_field(user_id, field, value):
         await db.execute(f"UPDATE tracked_users SET {field} = ? WHERE user_id = ?", (value, user_id))
         await db.commit()
 
-# New function to update presence state atomically
 async def update_presence_state(user_id, presence_type, place_id, game_id):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("""
@@ -128,18 +137,18 @@ async def get_user_history(user_id):
         row = await cursor.fetchone()
         return row if row else None
 
-async def update_history_field(user_id, field, value_list):
-    json_val = json.dumps(value_list)
+async def update_history_field(user_id, field, value_obj):
+    json_val = json.dumps(value_obj)
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute(f"UPDATE user_history SET {field} = ? WHERE user_id = ?", (json_val, user_id))
         await db.commit()
 
-async def set_server_config(guild_id, channel_type, channel_id):
+async def set_server_config(guild_id, key, value):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute(f"""
-            INSERT INTO server_config (guild_id, {channel_type}) VALUES (?, ?)
-            ON CONFLICT(guild_id) DO UPDATE SET {channel_type} = ?
-        """, (guild_id, channel_id, channel_id))
+            INSERT INTO server_config (guild_id, {key}) VALUES (?, ?)
+            ON CONFLICT(guild_id) DO UPDATE SET {key} = ?
+        """, (guild_id, value, value))
         await db.commit()
         
 async def get_server_configs():

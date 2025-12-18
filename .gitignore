@@ -6,6 +6,9 @@ logs/
 stalker_data.db
 todo.txt
 website/
-build/
+setup_script.iss
 dist/
 RBXStalkerV2.spec
+build.bat
+installed.flag
+__pycache__/

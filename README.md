@@ -1,6 +1,6 @@
 hi
 
-https://sp9tt3dtail.github.io is a half website for this
+https://sp0tt3dtail.github.io is a half website for this
 
 the pre release dosent work at all
 
